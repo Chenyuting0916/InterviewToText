@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Audio Transcriber</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>AI Transcriber</h1>
+            <p>Upload your audio, get speaker-labeled text instantly.</p>
+        </header>
+
+        <main>
+            <div class="upload-card" id="drop-zone">
+                <form id="upload-form">
+                    <input type="file" id="file-input" name="audio" accept="audio/*" hidden>
+                    <div class="upload-content">
+                        <div class="icon-wrapper">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <h3>Click to upload or drag & drop</h3>
+                        <p class="file-info">MP3, WAV, M4A up to 50MB</p>
+                        <p id="selected-filename"></p>
+                    </div>
+                </form>
+            </div>
+
+            <div class="status-container hidden" id="status-container">
+                <div class="loader"></div>
+                <p id="status-text">Processing audio...</p>
+                <p class="sub-status">This may take a minute for longer files.</p>
+            </div>
+
+            <div class="result-card hidden" id="result-card">
+                <div class="result-header">
+                    <h2>Transcription</h2>
+                    <button id="copy-btn" class="secondary-btn">Copy Text</button>
+                </div>
+                <div class="result-content" id="result-content">
+                    <!-- Transcription will appear here -->
+                </div>
+            </div>
+            
+            <div id="error-message" class="error-message hidden"></div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
