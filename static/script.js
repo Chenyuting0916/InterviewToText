@@ -70,24 +70,52 @@ document.addEventListener('DOMContentLoaded', () => {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
-        .then(data => {
-            // Hide loading state
-            statusContainer.classList.add('hidden');
-            dropZone.classList.remove('hidden');
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    statusContainer.classList.add('hidden');
+                    dropZone.classList.remove('hidden');
+                } else if (data.task_id) {
+                    // improved polling starts here
+                    pollStatus(data.task_id);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusContainer.classList.add('hidden');
+                dropZone.classList.remove('hidden');
+                showError('An error occurred during upload. Please try again.');
+            });
+    }
 
-            if (data.error) {
-                showError(data.error);
-            } else {
-                showResult(data.transcript);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            statusContainer.classList.add('hidden');
-            dropZone.classList.remove('hidden');
-            showError('An error occurred during upload. Please try again.');
-        });
+    function pollStatus(taskId) {
+        // Poll every 5 seconds to reduce network traffic
+        setTimeout(() => {
+            fetch(`/status/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        statusContainer.classList.add('hidden');
+                        dropZone.classList.remove('hidden');
+                        showResult(data.transcript);
+                    } else if (data.status === 'failed') {
+                        statusContainer.classList.add('hidden');
+                        dropZone.classList.remove('hidden');
+                        showError(data.error || 'Processing failed.');
+                    } else {
+                        // Still processing or queued
+                        // Update status text if needed
+                        pollStatus(taskId);
+                    }
+                })
+                .catch(error => {
+                    console.error('Polling Error:', error);
+                    statusContainer.classList.add('hidden');
+                    dropZone.classList.remove('hidden');
+                    showError('Network error while checking status.');
+                });
+        }, 5000);
     }
 
     function showResult(htmlContent) {
