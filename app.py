@@ -47,7 +47,7 @@ def upload_file():
                 
                 # Generate content
                 print("Generating transcript...")
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-flash-latest")
                 
                 # Prompt for transcription and diarization
                 prompt = (

@@ -4,3 +4,6 @@ __pycache__/
 .env
 uploads/
 .DS_Store
+list_models.py
+models_utf8.txt
+models.txt
