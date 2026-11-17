@@ -3,3 +3,4 @@ google-generativeai
 python-dotenv
 gunicorn
 markdown
+bleach==6.2.0

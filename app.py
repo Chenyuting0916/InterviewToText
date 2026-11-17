@@ -1,8 +1,10 @@
 import os
+import re
 import threading
 import uuid
 import time
 from flask import Flask, render_template, request, jsonify
+import bleach
 import google.generativeai as genai
 from dotenv import load_dotenv
 import markdown
@@ -20,12 +22,49 @@ if GOOGLE_API_KEY:
 
 # In-memory storage for tasks (NOTE: Works only with a single worker process)
 TASKS = {}
+_UPLOADS = {}
+ALLOWED_AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".flac", ".aac", ".mp4", ".mpeg", ".mpga"}
+ALLOWED_CONTENT_TYPES = {"", "application/octet-stream", "video/webm", "video/mp4"}
 
-def process_audio_background(task_id, file_path, original_filename):
+def _client_ip():
+    return request.remote_addr or "unknown"
+
+def _too_many_uploads():
+    now = time.time()
+    ip = _client_ip()
+    recent = [stamp for stamp in _UPLOADS.get(ip, []) if now - stamp < 3600]
+    if len(recent) >= 8:
+        _UPLOADS[ip] = recent
+        return True
+    recent.append(now)
+    _UPLOADS[ip] = recent
+    return False
+
+def _audio_path(original_filename):
+    extension = os.path.splitext(original_filename or "")[1].lower()
+    if extension not in ALLOWED_AUDIO_EXTENSIONS or not re.fullmatch(r"\.[a-z0-9]{1,8}", extension):
+        raise ValueError("unsupported")
+    folder = os.path.abspath("uploads")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.abspath(os.path.join(folder, f"{uuid.uuid4().hex}{extension}"))
+    if os.path.commonpath([folder, path]) != folder:
+        raise ValueError("unsupported")
+    return path
+
+def _transcript_html(text):
+    rendered = markdown.markdown(text or "", output_format="html")
+    return bleach.clean(
+        rendered,
+        tags=["p", "br", "strong", "em", "ul", "ol", "li", "h1", "h2", "h3", "blockquote", "code", "pre"],
+        attributes={},
+        strip=True,
+    )
+
+def process_audio_background(task_id, file_path):
     """Background worker to process audio with Gemini."""
     try:
         TASKS[task_id]['status'] = 'processing'
-        print(f"Task {task_id}: Uploading {original_filename} to Gemini...")
+        print(f"Task {task_id}: Uploading audio to Gemini...")
         
         # Upload to Gemini (File API)
         myfile = genai.upload_file(file_path)
@@ -51,17 +90,14 @@ def process_audio_background(task_id, file_path, original_filename):
         
         result = model.generate_content([myfile, prompt])
         
-        # Convert Markdown result to HTML
-        transcript_html = markdown.markdown(result.text)
-        
         TASKS[task_id]['status'] = 'completed'
-        TASKS[task_id]['result'] = transcript_html
+        TASKS[task_id]['result'] = _transcript_html(getattr(result, "text", "") or "")
         print(f"Task {task_id}: Completed successfully.")
 
     except Exception as e:
         print(f"Task {task_id} Error: {e}")
         TASKS[task_id]['status'] = 'failed'
-        TASKS[task_id]['error'] = str(e)
+        TASKS[task_id]['error'] = "Transcription failed"
     
     finally:
         # Cleanup temp file
@@ -84,11 +120,17 @@ def upload_file():
     if not os.getenv('GOOGLE_API_KEY'):
         return jsonify({'error': 'Server configuration error: API Key missing'}), 500
 
-    # Save file temporarily
-    upload_folder = 'uploads'
-    os.makedirs(upload_folder, exist_ok=True)
-    temp_filename = f"{uuid.uuid4()}_{audio_file.filename}"
-    temp_path = os.path.join(upload_folder, temp_filename)
+    if _too_many_uploads():
+        return jsonify({'error': 'Too many uploads. Please try again later.'}), 429
+
+    content_type = (audio_file.mimetype or "").split(";")[0].strip().lower()
+    if content_type not in ALLOWED_CONTENT_TYPES and not content_type.startswith("audio/"):
+        return jsonify({'error': 'Please provide an audio file'}), 400
+
+    try:
+        temp_path = _audio_path(audio_file.filename)
+    except ValueError:
+        return jsonify({'error': 'Unsupported audio type'}), 400
     audio_file.save(temp_path)
 
     # Create Task
@@ -101,7 +143,7 @@ def upload_file():
     # Start Background Thread
     thread = threading.Thread(
         target=process_audio_background, 
-        args=(task_id, temp_path, audio_file.filename)
+        args=(task_id, temp_path)
     )
     thread.start()
 
@@ -124,4 +166,4 @@ def check_status(task_id):
     return jsonify(response)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False, host='127.0.0.1')
